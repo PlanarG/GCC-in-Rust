@@ -1,0 +1,117 @@
+use crate::ast::*;
+
+grammar;
+
+match {
+    r"\s*" => {},
+    r"//[^\n\r]*" => {},
+    r"/\*[^*]*\*+([^/*][^*]*\*+)*/" => {},
+    _
+}
+
+pub Program: Ast = <obj: (GlobalObj)*> => Ast { <> };
+
+GlobalObj: GlobalObj = {
+    Decl => GlobalObj::Decl(<>),
+    Func => GlobalObj::Func(<>),
+};
+
+Init: Init = {
+    <name: Ident> "=" <expr: Expr> => Init { name, value: Some(expr) },
+    <name: Ident> => Init { name, value: None },
+};
+
+Comma<T>: Vec<T> = {
+    <mut head: (<T> ",")*> <tail: T> => {
+        head.push(tail);
+        head
+    },
+};
+
+Decl: Decl = {
+    "const" <ty: Type> <init: Comma<Init>> ";" => Decl::Const(ty, init),
+    <ty: Type> <init: Comma<Init>> ";" => Decl::Var(ty, init),
+};
+
+Type: Type = {
+    "int" => Type::Int,
+    "void" => Type::Void,
+};
+
+Func: Func = {
+    <ty: Type> <name: Ident> "(" <params: Comma<Param>> ")" <body: Block> => Func { name, params, body, ty },
+    <ty: Type> <name: Ident> "(" ")" <body: Block> => Func { name, params: Vec::new(), body, ty },
+};
+
+Param: Param = {
+    <ty: Type> <name: Ident> => Param { <> },
+};
+
+Block: Block = {
+    "{" <stmts: (Stmt)*> "}" => Block { stmts },
+};
+
+Stmt: Stmt = {
+    "return" <expr: Expr> ";" => Stmt::Return(expr),
+};
+
+Expr: Expr = {
+    Lv6,
+    <lhs: Expr> "&&" <rhs: Lv6> => Expr::Binary(MultiOp::And, Box::new(lhs), Box::new(rhs)),
+};
+
+Lv6: Expr = {
+    Lv5,
+    <lhs: Lv6> "||" <rhs: Lv5> => Expr::Binary(MultiOp::Or, Box::new(lhs), Box::new(rhs)),
+};
+
+Lv5: Expr = {
+    Lv4, 
+    <lhs: Lv5> "==" <rhs: Lv4> => Expr::Binary(MultiOp::Eq, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv5> "!=" <rhs: Lv4> => Expr::Binary(MultiOp::Ne, Box::new(lhs), Box::new(rhs)),
+}
+
+Lv4: Expr = {
+    Lv3,
+    <lhs: Lv4> "<"  <rhs: Lv3> => Expr::Binary(MultiOp::Lt, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv4> "<=" <rhs: Lv3> => Expr::Binary(MultiOp::Le, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv4> ">"  <rhs: Lv3> => Expr::Binary(MultiOp::Gt, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv4> ">=" <rhs: Lv3> => Expr::Binary(MultiOp::Ge, Box::new(lhs), Box::new(rhs)),
+};
+
+Lv3: Expr = {
+    Lv2,
+    <lhs: Lv3> "+" <rhs: Lv2> => Expr::Binary(MultiOp::Add, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv3> "-" <rhs: Lv2> => Expr::Binary(MultiOp::Sub, Box::new(lhs), Box::new(rhs)),
+};
+
+Lv2: Expr = {
+    Lv1,
+    <lhs: Lv2> "*" <rhs: Lv1> => Expr::Binary(MultiOp::Mul, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv2> "/" <rhs: Lv1> => Expr::Binary(MultiOp::Div, Box::new(lhs), Box::new(rhs)),
+    <lhs: Lv2> "%" <rhs: Lv1> => Expr::Binary(MultiOp::Mod, Box::new(lhs), Box::new(rhs)),
+};
+
+Lv1: Expr = {
+    Term,
+    "-" <x: Lv1> => Expr::Unary(UnaryOp::Neg, Box::new(x)),
+    "+" <x: Lv1> => Expr::Unary(UnaryOp::Pos, Box::new(x)),
+    "!" <x: Lv1> => Expr::Unary(UnaryOp::Not, Box::new(x)),
+};
+
+Term: Expr = {
+    Value => Expr::Value(<>),
+    "(" <expr: Expr> ")" => expr,
+};
+
+Value: Value = {
+    Num => Value::Num(<>),
+};
+
+Num: i32 = {
+    r"[1-9][0-9]*" => i32::from_str_radix(&<>, 10).unwrap(),
+    r"0[0-7]*" => i32::from_str_radix(&<>, 8).unwrap(),
+    r"0[xX][0-9a-fA-F]+" => i32::from_str_radix(&<>[2..], 16).unwrap(),
+};
+
+Ident: String = r"[a-zA-Z_][a-zA-Z0-9_]*" => <>.to_string();
