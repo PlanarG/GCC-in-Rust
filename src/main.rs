@@ -14,7 +14,9 @@ struct Args {
     #[arg(short, long)]
     output: String,
     #[arg(short, long)]
-    koopa: bool
+    koopa: bool,
+    #[arg(short, long)]
+    riscv: bool
 }
 
 fn main() { 
@@ -37,10 +39,16 @@ fn main() {
     let file = std::fs::read_to_string(&args.file).unwrap();
     let ast = sysy::ProgramParser::new().parse(&file).unwrap();
 
+    let output = args.output.clone();
+
     let koopa_ir = ir::construct(&ast);
+    
     if args.koopa {
-        KoopaGenerator::from_path(args.output).unwrap().generate_on(&koopa_ir).unwrap();
-    } else {
-        asm::assemble(&koopa_ir, &args.output).unwrap();
+        KoopaGenerator::from_path(output.clone()).unwrap().generate_on(&koopa_ir).unwrap();
+    } 
+    
+    if args.riscv {
+        let mut file = std::fs::File::create(output).unwrap();
+        asm::assemble(&koopa_ir, &mut file).unwrap();
     }
 } 
